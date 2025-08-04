@@ -1,4 +1,20 @@
 from typing import Optional, Literal
+from dataclasses import dataclass
+
+
+@dataclass
+class Sentence:
+    text_id: int
+    sentence_id: int
+    sentence_body: str
+    grammar_annotations: list[int] #rule id
+    vocab_annotations: list[int] #word id
+
+@dataclass
+class OriginalText:
+    text_id: int
+    text_title: str
+    text_by_sentence: list[Sentence]
 
 class Token:
     token_body: str

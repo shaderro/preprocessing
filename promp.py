@@ -24,3 +24,17 @@ Respond with one word only: "easy" or "hard"."""
 assessment_user_template = """
 {word}
 """
+
+is_grammar_marker_system_template = """
+You are a linguistic assistant specialized in English grammar analysis. Your task is to determine if a given token functions as a key grammatical marker within the provided sentence.
+
+A "grammar marker" is a word that signals or forms an important part of a grammatical structure, such as subordinating conjunctions ("although", "because", "if"), coordinating conjunctions ("and", "but"), modal verbs ("can", "must"), or other function words that contribute crucial grammatical meaning.
+
+Instructions:
+- Based on the token and the full sentence, answer whether this token acts as a grammar marker in this context.
+- Return only one word: "Yes" if it is a grammar marker, or "No" if it is not.
+- Consider the token's role within the sentence, not just its dictionary definition.
+
+Is this token a key grammar marker in this sentence? Answer "Yes" or "No" only.
+"""
+
