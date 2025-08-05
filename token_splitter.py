@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 
 def split_tokens(text: str) -> List[Dict[str, Any]]:
     """
-    将文本分割成tokens，按照token.py中定义的数据结构
+    将文本分割成tokens，按照token_data.py中定义的数据结构
     
     Args:
         text: 输入的文本字符串
