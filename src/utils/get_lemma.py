@@ -2,14 +2,27 @@ import nltk
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import wordnet
 from typing import Optional
+import os
 
 # 下载必要的NLTK数据（如果还没有下载的话）
-try:
-    nltk.data.find('corpora/wordnet')
-except LookupError:
-    print("正在下载WordNet数据...")
-    nltk.download('wordnet')
-    nltk.download('averaged_perceptron_tagger')
+def ensure_nltk_data():
+    """确保NLTK数据已下载"""
+    try:
+        # 检查wordnet是否可用
+        nltk.data.find('corpora/wordnet')
+    except LookupError:
+        print("正在下载WordNet数据...")
+        nltk.download('wordnet', quiet=True)
+    
+    try:
+        # 检查pos_tagger是否可用
+        nltk.data.find('taggers/averaged_perceptron_tagger')
+    except LookupError:
+        print("正在下载POS tagger数据...")
+        nltk.download('averaged_perceptron_tagger', quiet=True)
+
+# 确保数据已下载
+ensure_nltk_data()
 
 def get_wordnet_pos(word: str) -> str:
     """
@@ -21,18 +34,22 @@ def get_wordnet_pos(word: str) -> str:
     Returns:
         str: WordNet词性标签
     """
-    # 获取单词的词性
-    tag = nltk.pos_tag([word])[0][1]
-    
-    # 将Penn Treebank词性标签转换为WordNet词性标签
-    tag_dict = {
-        "J": wordnet.ADJ,
-        "N": wordnet.NOUN,
-        "V": wordnet.VERB,
-        "R": wordnet.ADV
-    }
-    
-    return tag_dict.get(tag[0], wordnet.NOUN)
+    try:
+        # 获取单词的词性
+        tag = nltk.pos_tag([word])[0][1]
+        
+        # 将Penn Treebank词性标签转换为WordNet词性标签
+        tag_dict = {
+            "J": wordnet.ADJ,
+            "N": wordnet.NOUN,
+            "V": wordnet.VERB,
+            "R": wordnet.ADV
+        }
+        
+        return tag_dict.get(tag[0], wordnet.NOUN)
+    except Exception as e:
+        # 如果POS tagging失败，返回默认的NOUN
+        return wordnet.NOUN
 
 def get_lemma(token_body: str) -> Optional[str]:
     """
@@ -67,7 +84,7 @@ def get_lemma(token_body: str) -> Optional[str]:
         return lemma
         
     except Exception as e:
-        print(f"处理token '{token_body}' 时发生错误: {e}")
+        # 静默处理错误，返回None而不是打印错误信息
         return None
 
 def main():

@@ -1,6 +1,6 @@
 from openai import OpenAI
 #, Sentence, GrammarRule, GrammarExample, GrammarBundle, VocabExpression, VocabExpressionExample
-from utility import parse_json_from_text
+from ..utils.utility import parse_json_from_text
 
 class SubAssistant:
     def __init__(self, sys_prompt, max_tokens, parse_json):

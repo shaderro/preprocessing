@@ -1,5 +1,5 @@
-from sentence_splitter import read_and_split_sentences
-from token_splitter import split_tokens
+from src.core.sentence_splitter import read_and_split_sentences
+from src.core.token_splitter import split_tokens
 
 def final_demo():
     """

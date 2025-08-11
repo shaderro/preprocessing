@@ -3,6 +3,10 @@
 
 import json
 import os
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+from src.core.text_processor import TextProcessor
 
 def verify_processing():
     """验证5句话文章的处理结果"""

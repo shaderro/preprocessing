@@ -5,10 +5,13 @@ OpenAI使用示例脚本
 """
 
 import os
-from openai_utils import OpenAIHelper, test_openai_connection
-from token_splitter import split_tokens
-from get_lemma import get_lemma
-from get_pos_tag import get_pos_tag
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+from src.utils.openai_utils import OpenAIHelper, test_openai_connection
+from src.core.token_splitter import split_tokens
+from src.utils.get_lemma import get_lemma
+from src.utils.get_pos_tag import get_pos_tag
 
 def setup_environment():
     """设置环境变量（如果还没有设置）"""

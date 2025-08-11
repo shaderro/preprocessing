@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from single_token_difficulty_estimation import SingleTokenDifficultyEstimator
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+from src.agents.single_token_difficulty_estimation import SingleTokenDifficultyEstimator
 
 def test_difficulty_estimation():
     """测试单词难度评估功能"""

@@ -2,8 +2,8 @@ import re
 import json
 import os
 from typing import List, Union
-from token_data import OriginalText, Sentence, Token
-from token_splitter import split_tokens
+from .token_data import OriginalText, Sentence, Token
+from .token_splitter import split_tokens
 
 def split_sentences(text: str) -> List[str]:
     """
@@ -132,7 +132,7 @@ def save_structured_data(original_text: OriginalText, output_dir: str):
                         "difficulty_level": token.difficulty_level,
                         "global_token_id": token.global_token_id,
                         "sentence_token_id": token.sentence_token_id,
-                        "explanation": token.explanation,
+                        "linked_vocab_id": token.linked_vocab_id,
                         "pos_tag": token.pos_tag,
                         "lemma": token.lemma,
                         "is_grammar_marker": token.is_grammar_marker
@@ -162,7 +162,7 @@ def save_structured_data(original_text: OriginalText, output_dir: str):
                     "difficulty_level": token.difficulty_level,
                     "global_token_id": token.global_token_id,
                     "sentence_token_id": token.sentence_token_id,
-                    "explanation": token.explanation,
+                    "linked_vocab_id": token.linked_vocab_id,
                     "pos_tag": token.pos_tag,
                     "lemma": token.lemma,
                     "is_grammar_marker": token.is_grammar_marker
@@ -188,7 +188,7 @@ def save_structured_data(original_text: OriginalText, output_dir: str):
                 "sentence_token_id": token.sentence_token_id,
                 "sentence_id": sentence.sentence_id,
                 "text_id": sentence.text_id,
-                "explanation": token.explanation,
+                "linked_vocab_id": token.linked_vocab_id,
                 "pos_tag": token.pos_tag,
                 "lemma": token.lemma,
                 "is_grammar_marker": token.is_grammar_marker

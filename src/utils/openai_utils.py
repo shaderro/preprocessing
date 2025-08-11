@@ -1,6 +1,6 @@
 from openai import OpenAI
 from typing import List, Dict, Any, Optional
-import config
+from . import config
 
 class OpenAIHelper:
     """OpenAI助手类，提供常用的OpenAI操作"""

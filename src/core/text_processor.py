@@ -5,9 +5,11 @@ import re
 import json
 import os
 import sys
-from typing import List, Union, Dict, Any
+from typing import List, Union, Dict, Any, Optional
 from dataclasses import dataclass, asdict
-from token_data import OriginalText, Sentence, Token
+from .token_data import OriginalText, Sentence, Token, VocabExpression, VocabExpressionExample
+from ..agents.single_token_difficulty_estimation import SingleTokenDifficultyEstimator
+from ..utils.get_lemma import get_lemma
 
 class TextProcessor:
     """文本处理器：将原始文本分割成结构化数据"""
@@ -21,6 +23,20 @@ class TextProcessor:
         """
         self.output_base_dir = output_base_dir
         os.makedirs(output_base_dir, exist_ok=True)
+        # 初始化难度评估器
+        self.difficulty_estimator = SingleTokenDifficultyEstimator()
+        # 初始化vocab转换器
+        self.vocab_converter = None
+        self.vocab_counter = 1
+        
+    def _init_vocab_converter(self, vocab_data_file: str = None):
+        """初始化vocab转换器"""
+        if self.vocab_converter is None:
+            if vocab_data_file is None:
+                vocab_data_file = os.path.join(self.output_base_dir, "vocab_data.json")
+            from ..utils.token_to_vocab import TokenToVocabConverter
+            self.vocab_converter = TokenToVocabConverter(vocab_data_file)
+            self.vocab_counter = self.vocab_converter.vocab_counter
     
     def split_sentences(self, text: str) -> List[str]:
         """
@@ -87,6 +103,61 @@ class TextProcessor:
         
         return tokens
     
+    def assess_token_difficulty(self, token_body: str, context: str = "") -> str:
+        """
+        评估token的难度级别
+        
+        Args:
+            token_body: token内容
+            context: 上下文（可选）
+            
+        Returns:
+            str: 难度级别 ("easy" 或 "hard")
+        """
+        try:
+            # 只对text类型的token进行难度评估
+            if not token_body or not token_body.strip():
+                return None
+            
+            # 调用难度评估器
+            difficulty_result = self.difficulty_estimator.run(token_body, verbose=False)
+            
+            # 清理结果，确保只返回 "easy" 或 "hard"
+            difficulty_result = difficulty_result.strip().lower()
+            if difficulty_result in ["easy", "hard"]:
+                return difficulty_result
+            else:
+                # 如果结果不是预期的格式，返回默认值
+                print(f"⚠️  警告：token '{token_body}' 的难度评估结果格式异常: '{difficulty_result}'")
+                return "easy"  # 默认返回easy
+                
+        except Exception as e:
+            print(f"❌ 评估token '{token_body}' 难度时发生错误: {e}")
+            return None
+    
+    def get_token_lemma(self, token_body: str) -> str:
+        """
+        获取token的lemma形式
+        
+        Args:
+            token_body: token内容
+            
+        Returns:
+            str: lemma形式，如果无法获取则返回None
+        """
+        try:
+            # 只对text类型的token进行lemma处理
+            if not token_body or not token_body.strip():
+                return None
+            
+            # 调用get_lemma函数
+            lemma = get_lemma(token_body)
+            return lemma
+            
+        except Exception as e:
+            print(f"❌ 获取token '{token_body}' 的lemma时发生错误: {e}")
+            return None
+    
     def process_text_to_structured_data(self, text: Union[str, str], text_id: int, text_title: str = "") -> OriginalText:
         """
         将文本处理成结构化数据
@@ -110,12 +181,16 @@ class TextProcessor:
             if not text_title:
                 text_title = f"Text_{text_id}"
         
+        # 初始化vocab转换器
+        self._init_vocab_converter()
+        
         # 分割句子
         sentence_texts = self.split_sentences(text_content)
         
         # 创建句子对象列表
         sentences = []
         global_token_id = 0
+        vocab_expressions = []  # 存储生成的vocab
         
         for sentence_id, sentence_text in enumerate(sentence_texts, 1):
             # 分割tokens
@@ -124,11 +199,21 @@ class TextProcessor:
             # 创建Token对象列表
             tokens = []
             for token_id, token_dict in enumerate(token_dicts, 1):
+                # 评估难度级别和获取lemma（只对text类型的token）
+                difficulty_level = None
+                lemma = None
+                if token_dict["token_type"] == "text":
+                    difficulty_level = self.assess_token_difficulty(token_dict["token_body"], sentence_text)
+                    lemma = self.get_token_lemma(token_dict["token_body"])
+                
                 token = Token(
                     token_body=token_dict["token_body"],
                     token_type=token_dict["token_type"],
                     global_token_id=global_token_id,
-                    sentence_token_id=token_id
+                    sentence_token_id=token_id,
+                    difficulty_level=difficulty_level,
+                    lemma=lemma,
+                    linked_vocab_id=None  # 初始化为None，稍后更新
                 )
                 tokens.append(token)
                 global_token_id += 1
@@ -143,6 +228,15 @@ class TextProcessor:
                 tokens=tokens
             )
             sentences.append(sentence)
+            
+            # 为hard难度的token生成vocab
+            for token in tokens:
+                if token.token_type == "text" and token.difficulty_level == "hard":
+                    vocab = self._generate_vocab_for_token(token, sentence, text_id)
+                    if vocab:
+                        vocab_expressions.append(vocab)
+                        # 更新token的linked_vocab_id
+                        token.linked_vocab_id = vocab.vocab_id
         
         # 创建OriginalText对象
         original_text = OriginalText(
@@ -150,6 +244,10 @@ class TextProcessor:
             text_title=text_title,
             text_by_sentence=sentences
         )
+        
+        # 保存vocab数据
+        if vocab_expressions:
+            self._save_vocab_data(vocab_expressions)
         
         return original_text
     
@@ -199,13 +297,14 @@ class TextProcessor:
         for sentence in original_text.text_by_sentence:
             for token_index, token in enumerate(sentence.tokens):
                 token_data = {
+                    "text_id": sentence.text_id,
                     "token_id": token.global_token_id,
                     "sentence_id": sentence.sentence_id,
                     "token_body": token.token_body,
                     "token_type": token.token_type,
                     "sentence_token_index": token_index,
                     "difficulty_level": token.difficulty_level,
-                    "explanation": token.explanation,
+                    "linked_vocab_id": token.linked_vocab_id,
                     "pos_tag": token.pos_tag,
                     "lemma": token.lemma,
                     "is_grammar_marker": token.is_grammar_marker
@@ -279,6 +378,154 @@ class TextProcessor:
         
         print(f"\n📊 批量处理完成！成功处理 {success_count}/{len(input_files)} 个文件")
         return success_count
+
+    def _generate_vocab_for_token(self, token: Token, sentence: Sentence, text_id: int) -> Optional[VocabExpression]:
+        """
+        为单个token生成vocab
+        
+        Args:
+            token: Token对象
+            sentence: 句子对象
+            text_id: 文本ID
+            
+        Returns:
+            VocabExpression: 生成的vocab对象，如果生成失败返回None
+        """
+        # 检查token是否为hard难度的text类型
+        if not (token.token_type == "text" and token.difficulty_level == "hard"):
+            return None
+        
+        try:
+            # 延迟导入以避免循环导入
+            from ..agents import VocabExplanationAssistant, VocabExampleExplanationAssistant
+            
+            # 初始化助手
+            vocab_explanation_assistant = VocabExplanationAssistant()
+            vocab_example_assistant = VocabExampleExplanationAssistant()
+            
+            # 获取词汇解释
+            vocab_explanation_result = vocab_explanation_assistant.run(sentence, token.token_body)
+            
+            # 获取上下文解释
+            context_explanation_result = vocab_example_assistant.run(token.token_body, sentence)
+            
+            # 解析解释结果
+            explanation = self._parse_explanation(vocab_explanation_result)
+            context_explanation = self._parse_context_explanation(context_explanation_result)
+            
+            # 创建VocabExpression对象
+            vocab_expression = VocabExpression(
+                vocab_id=self.vocab_counter,
+                vocab_body=token.lemma if token.lemma else token.token_body,  # 使用lemma
+                explanation=explanation,
+                source="auto",  # 标注为auto
+                is_starred=False,
+                examples=[]
+            )
+            
+            # 创建VocabExpressionExample
+            if context_explanation:
+                vocab_example = VocabExpressionExample(
+                    vocab_id=self.vocab_counter,
+                    text_id=text_id,
+                    sentence_id=sentence.sentence_id,
+                    context_explanation=context_explanation,
+                    token_indices=[token.sentence_token_id] if token.sentence_token_id else []
+                )
+                vocab_expression.examples.append(vocab_example)
+            
+            # 更新计数器
+            self.vocab_counter += 1
+            
+            return vocab_expression
+            
+        except Exception as e:
+            print(f"转换token '{token.token_body}' 到vocab失败: {e}")
+            return None
+    
+    def _parse_explanation(self, result: Any) -> str:
+        """解析词汇解释结果"""
+        if isinstance(result, dict):
+            return result.get('explanation', '')
+        elif isinstance(result, str):
+            # 尝试解析JSON字符串
+            try:
+                data = json.loads(result)
+                return data.get('explanation', '')
+            except:
+                return result
+        return str(result)
+    
+    def _parse_context_explanation(self, result: Any) -> str:
+        """解析上下文解释结果"""
+        if isinstance(result, dict):
+            return result.get('explanation', '')
+        elif isinstance(result, str):
+            # 尝试解析JSON字符串
+            try:
+                data = json.loads(result)
+                return data.get('explanation', '')
+            except:
+                return result
+        return str(result)
+
+    def _save_vocab_data(self, vocab_expressions: List[VocabExpression]):
+        """
+        保存vocab数据到指定路径
+        
+        Args:
+            vocab_expressions: vocab表达式列表
+        """
+        try:
+            # 创建vocab数据目录
+            vocab_output_dir = os.path.join(self.output_base_dir, "vocab_data")
+            os.makedirs(vocab_output_dir, exist_ok=True)
+            
+            # 读取现有数据（如果存在）
+            vocab_data_file = os.path.join(vocab_output_dir, "vocab_data.json")
+            existing_vocabs = []
+            if os.path.exists(vocab_data_file):
+                try:
+                    with open(vocab_data_file, 'r', encoding='utf-8') as f:
+                        existing_data = json.load(f)
+                        existing_vocabs = existing_data.get('vocab_expressions', [])
+                except Exception as e:
+                    print(f"读取现有vocab数据失败: {e}")
+            
+            # 添加新的vocab数据
+            for vocab in vocab_expressions:
+                vocab_dict = {
+                    'vocab_id': vocab.vocab_id,
+                    'vocab_body': vocab.vocab_body,
+                    'explanation': vocab.explanation,
+                    'source': vocab.source,
+                    'is_starred': vocab.is_starred,
+                    'examples': [
+                        {
+                            'vocab_id': example.vocab_id,
+                            'text_id': example.text_id,
+                            'sentence_id': example.sentence_id,
+                            'context_explanation': example.context_explanation,
+                            'token_indices': example.token_indices
+                        }
+                        for example in vocab.examples
+                    ]
+                }
+                existing_vocabs.append(vocab_dict)
+            
+            # 保存vocab数据
+            vocab_data = {
+                'vocab_expressions': existing_vocabs,
+                'next_vocab_id': self.vocab_counter
+            }
+            
+            with open(vocab_data_file, 'w', encoding='utf-8') as f:
+                json.dump(vocab_data, f, ensure_ascii=False, indent=2)
+            
+            print(f"✅ 成功保存 {len(vocab_expressions)} 个vocab到 {vocab_data_file}")
+            
+        except Exception as e:
+            print(f"❌ 保存vocab数据失败: {e}")
 
 def main():
     """主函数：处理命令行输入的文件"""

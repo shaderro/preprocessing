@@ -1,5 +1,5 @@
-from sub_assistant import SubAssistant
-from promp import difficulty_estimation_system_template_specific_standard, difficulty_estimation_system_template_default, assessment_user_template
+from .sub_assistant import SubAssistant
+from ..utils.promp import difficulty_estimation_system_template_specific_standard, difficulty_estimation_system_template_default, assessment_user_template
 
 class SingleTokenDifficultyEstimator(SubAssistant):
     def __init__(self):
